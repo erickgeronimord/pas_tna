@@ -6,6 +6,9 @@ import plotly.express as px
 from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import gdown
+import tempfile
+import os
 
 # Configuración de página
 st.set_page_config(
@@ -52,100 +55,116 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# Carga y preparación de datos optimizada
+# Carga y preparación de datos desde Google Drive
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
-    file_path = "D:/Desktop2/TRABAJO BD/PROYECTOS_DB/IM/REPORTE DE VENTAS SAP/SAP-B-2025.xlsx"
+    # Enlace directo al archivo SAP-B-2025.xlsx
+    sap_file_url = "https://drive.google.com/uc?id=1dnyGUW_pOdhjNgcX39MgdDpNpDwCTGVX"
+    
     try:
-        cols = ['Fecha', 'Year', 'Mes', 'Vendedor', 'Ce.', 'SKU',
-                'Texto breve de material', 'Nombre Cliente', 'Cantidad vendida',
-                'Monto vendido', 'PRECIO PROM', 'Factura', 'Oferta', 'Familia_prod']
-        
-        dtypes = {
-            'Fecha': 'str',
-            'Year': 'int16',
-            'Mes': 'str',
-            'Vendedor': 'category',
-            'Ce.': 'category',
-            'SKU': 'category',
-            'Texto breve de material': 'category',
-            'Nombre Cliente': 'category',
-            'Cantidad vendida': 'float32',
-            'Monto vendido': 'float32',
-            'PRECIO PROM': 'float32',
-            'Factura': 'category',
-            'Oferta': 'int8',
-            'Familia_prod': 'category'
-        }
-        
-        df = pd.read_excel(file_path, usecols=cols, dtype=dtypes)
-        
-        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('int16')
-        df['Mes'] = df['Mes'].astype('category')
-        
-        meses_validos = [m for m in MESES_ORDEN if m in df['Mes'].unique()]
-        df = df[df['Mes'].isin(meses_validos)]
-        
-        mes_orden = {mes: i+1 for i, mes in enumerate(MESES_ORDEN)}
-        df['Mes_Orden'] = df['Mes'].map(mes_orden).astype('int8')
-        
-        return df
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            gdown.download(sap_file_url, tmp.name, quiet=True)
+            
+            cols = ['Fecha', 'Year', 'Mes', 'Vendedor', 'Ce.', 'SKU',
+                    'Texto breve de material', 'Nombre Cliente', 'Cantidad vendida',
+                    'Monto vendido', 'PRECIO PROM', 'Factura', 'Oferta', 'Familia_prod']
+            
+            dtypes = {
+                'Fecha': 'str',
+                'Year': 'int16',
+                'Mes': 'str',
+                'Vendedor': 'category',
+                'Ce.': 'category',
+                'SKU': 'category',
+                'Texto breve de material': 'category',
+                'Nombre Cliente': 'category',
+                'Cantidad vendida': 'float32',
+                'Monto vendido': 'float32',
+                'PRECIO PROM': 'float32',
+                'Factura': 'category',
+                'Oferta': 'int8',
+                'Familia_prod': 'category'
+            }
+            
+            df = pd.read_excel(tmp.name, usecols=cols, dtype=dtypes)
+            
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('int16')
+            df['Mes'] = df['Mes'].astype('category')
+            
+            meses_validos = [m for m in MESES_ORDEN if m in df['Mes'].unique()]
+            df = df[df['Mes'].isin(meses_validos)]
+            
+            mes_orden = {mes: i+1 for i, mes in enumerate(MESES_ORDEN)}
+            df['Mes_Orden'] = df['Mes'].map(mes_orden).astype('int8')
+            
+            return df
+            
     except Exception as e:
-        st.error(f"Error al cargar el archivo: {str(e)}")
+        st.error(f"Error al cargar el archivo desde Google Drive: {str(e)}")
         return pd.DataFrame()
+    finally:
+        if 'tmp' in locals() and os.path.exists(tmp.name):
+            os.unlink(tmp.name)
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_quota_data():
-    file_path = "D:/Desktop2/TRABAJO BD/PROYECTOS_DB/IM/REPORTE DE VENTAS SAP/CUOTA.xlsx"
+    # Enlace directo al archivo CUOTA.xlsx
+    quota_file_url = "https://drive.google.com/uc?id=1M6-7LbM7wSSIbBcntZ5-Jc8wFS0s-TnB"
+    
     try:
-        # Leer todas las columnas primero para inspección
-        df_quota = pd.read_excel(file_path)
-        
-        # Verificar si las columnas requeridas existen
-        required_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 
-                        'Monto meta', 'Cantidad meta', 'Mes', 'Year']
-        
-        missing_cols = [col for col in required_cols if col not in df_quota.columns]
-        if missing_cols:
-            st.error(f"Columnas faltantes en el archivo de cuotas: {missing_cols}")
-            return pd.DataFrame()
-        
-        # Si todas las columnas existen, procesar
-        df_quota = df_quota[required_cols].copy()
-        
-        # Procesamiento de datos
-        if df_quota['Monto meta'].dtype == 'object':
-            df_quota['Monto meta'] = pd.to_numeric(
-                df_quota['Monto meta'].astype(str).str.replace(',', ''), 
-                errors='coerce'
-            ).fillna(0).astype('float32')
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            gdown.download(quota_file_url, tmp.name, quiet=True)
             
-        df_quota['Cantidad meta'] = pd.to_numeric(
-            df_quota['Cantidad meta'], 
-            errors='coerce'
-        ).fillna(0).astype('int32')
-        
-        # Convertir a categorías
-        cat_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 'Mes']
-        for col in cat_cols:
-            if col in df_quota.columns:
-                df_quota[col] = df_quota[col].astype('category')
-        
-        df_quota['Year'] = df_quota['Year'].astype('int16')
-        
-        return df_quota
+            # Leer todas las columnas primero para inspección
+            df_quota = pd.read_excel(tmp.name)
+            
+            # Verificar si las columnas requeridas existen
+            required_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 
+                            'Monto meta', 'Cantidad meta', 'Mes', 'Year']
+            
+            missing_cols = [col for col in required_cols if col not in df_quota.columns]
+            if missing_cols:
+                st.error(f"Columnas faltantes en el archivo de cuotas: {missing_cols}")
+                return pd.DataFrame()
+            
+            df_quota = df_quota[required_cols].copy()
+            
+            if df_quota['Monto meta'].dtype == 'object':
+                df_quota['Monto meta'] = pd.to_numeric(
+                    df_quota['Monto meta'].astype(str).str.replace(',', ''), 
+                    errors='coerce'
+                ).fillna(0).astype('float32')
+                
+            df_quota['Cantidad meta'] = pd.to_numeric(
+                df_quota['Cantidad meta'], 
+                errors='coerce'
+            ).fillna(0).astype('int32')
+
+# Cargar categorias y convertir tipos            
+            cat_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 'Mes']
+            for col in cat_cols:
+                if col in df_quota.columns:
+                    df_quota[col] = df_quota[col].astype('category')
+            
+            df_quota['Year'] = df_quota['Year'].astype('int16')
+            
+            return df_quota
+            
     except Exception as e:
-        st.error(f"Error al cargar el archivo de cuotas: {str(e)}")
+        st.error(f"Error al cargar el archivo de cuotas desde Google Drive: {str(e)}")
         return pd.DataFrame()
+    finally:
+        if 'tmp' in locals() and os.path.exists(tmp.name):
+            os.unlink(tmp.name)
 
 # Cargar datos
-with st.spinner("Cargando datos..."):
+with st.spinner("Cargando datos desde Google Drive..."):
     df = load_data()
     quota_df = load_quota_data()
 
 if df.empty:
-    st.warning("No se pudieron cargar los datos. Verifica la ruta del archivo.")
+    st.warning("No se pudieron cargar los datos. Verifica los enlaces de Google Drive.")
     st.stop()
 
 # Sidebar para filtros
