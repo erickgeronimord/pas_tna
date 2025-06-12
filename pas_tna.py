@@ -6,8 +6,6 @@ import plotly.express as px
 from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import gdown
-import tempfile
 
 # Configuración de página
 st.set_page_config(
@@ -41,19 +39,28 @@ st.markdown(f"""
         .css-1vq4p4l {{padding: 1rem;}}
         .css-1q8dd3e {{color: {COLORES['texto']};}}
         .css-1q8dd3e:hover {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:focus {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:active {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:visited {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:disabled {{color: {COLORES['neutro']};}}
+        .css-1q8dd3e:enabled {{color: {COLORES['texto']};}}
+        .css-1q8dd3e:enabled:hover {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:enabled:focus {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:enabled:active {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:enabled:visited {{color: {COLORES['positivo']};}}
+        .css-1q8dd3e:enabled:disabled {{color: {COLORES['neutro']};}}
     </style>
 """, unsafe_allow_html=True)
 
-# Carga de datos con gdown
+# Carga y preparación de datos optimizada
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
-    file_id = "1dnyGUW_pOdhjNgcX39MgdDpNpDwCTGVX"
-    url = f"https://drive.google.com/uc?id={file_id}"
+    file_path = "D:/Desktop2/TRABAJO BD/PROYECTOS_DB/IM/REPORTE DE VENTAS SAP/SAP-B-2025.xlsx"
     try:
-        cols = ['Fecha', 'Year', 'Mes', 'Vendedor', 'Ce.', 'SKU', 
-               'Texto breve de material', 'Nombre Cliente', 'Cantidad vendida',
-               'Monto vendido', 'PRECIO PROM', 'Factura', 'Oferta']
-
+        cols = ['Fecha', 'Year', 'Mes', 'Vendedor', 'Ce.', 'SKU',
+                'Texto breve de material', 'Nombre Cliente', 'Cantidad vendida',
+                'Monto vendido', 'PRECIO PROM', 'Factura', 'Oferta', 'Familia_prod']
+        
         dtypes = {
             'Fecha': 'str',
             'Year': 'int16',
@@ -67,23 +74,22 @@ def load_data():
             'Monto vendido': 'float32',
             'PRECIO PROM': 'float32',
             'Factura': 'category',
-            'Oferta': 'int8'
+            'Oferta': 'int8',
+            'Familia_prod': 'category'
         }
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            gdown.download(url, tmp.name, quiet=True)
-            df = pd.read_excel(tmp.name, usecols=cols, dtype=dtypes)
-
+        
+        df = pd.read_excel(file_path, usecols=cols, dtype=dtypes)
+        
         df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('int16')
         df['Mes'] = df['Mes'].astype('category')
-
+        
         meses_validos = [m for m in MESES_ORDEN if m in df['Mes'].unique()]
         df = df[df['Mes'].isin(meses_validos)]
-
+        
         mes_orden = {mes: i+1 for i, mes in enumerate(MESES_ORDEN)}
         df['Mes_Orden'] = df['Mes'].map(mes_orden).astype('int8')
-
+        
         return df
     except Exception as e:
         st.error(f"Error al cargar el archivo: {str(e)}")
@@ -91,39 +97,43 @@ def load_data():
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_quota_data():
-    file_id = "1M6-7LbM7wSSIbBcntZ5-Jc8wFS0s-TnB"
-    url = f"https://drive.google.com/uc?id={file_id}"
+    file_path = "D:/Desktop2/TRABAJO BD/PROYECTOS_DB/IM/REPORTE DE VENTAS SAP/CUOTA.xlsx"
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            gdown.download(url, tmp.name, quiet=True)
-            df_quota = pd.read_excel(tmp.name)
-
+        # Leer todas las columnas primero para inspección
+        df_quota = pd.read_excel(file_path)
+        
+        # Verificar si las columnas requeridas existen
         required_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 
-                         'Monto meta', 'Cantidad meta', 'Mes', 'Year']
-
+                        'Monto meta', 'Cantidad meta', 'Mes', 'Year']
+        
         missing_cols = [col for col in required_cols if col not in df_quota.columns]
         if missing_cols:
             st.error(f"Columnas faltantes en el archivo de cuotas: {missing_cols}")
             return pd.DataFrame()
-
+        
+        # Si todas las columnas existen, procesar
         df_quota = df_quota[required_cols].copy()
-
+        
+        # Procesamiento de datos
         if df_quota['Monto meta'].dtype == 'object':
             df_quota['Monto meta'] = pd.to_numeric(
                 df_quota['Monto meta'].astype(str).str.replace(',', ''), 
                 errors='coerce'
             ).fillna(0).astype('float32')
-
+            
         df_quota['Cantidad meta'] = pd.to_numeric(
-            df_quota['Cantidad meta'], errors='coerce'
+            df_quota['Cantidad meta'], 
+            errors='coerce'
         ).fillna(0).astype('int32')
-
+        
+        # Convertir a categorías
         cat_cols = ['Ce.', 'Vendedor', 'Material', 'Texto breve de material', 'Mes']
         for col in cat_cols:
-            df_quota[col] = df_quota[col].astype('category')
-
+            if col in df_quota.columns:
+                df_quota[col] = df_quota[col].astype('category')
+        
         df_quota['Year'] = df_quota['Year'].astype('int16')
-
+        
         return df_quota
     except Exception as e:
         st.error(f"Error al cargar el archivo de cuotas: {str(e)}")
@@ -273,11 +283,48 @@ with tab1:
     
     # Comparativo de desempeño mejorado
     st.subheader("Comparativo de Desempeño")
+    
+    # Verificar primero si hay meses disponibles
+    if not meses_disponibles:
+        st.error("⚠️ No hay datos disponibles en el mes seleccionado para realizar la comparación. Verifica los filtros aplicados.")
+        st.stop()
+
     selected_month = st.selectbox(
         "Seleccionar Mes para Comparar", 
         options=meses_disponibles,
         key="mes_comparacion"
     )
+
+    # Verificar si el mes seleccionado coincide con los meses filtrados
+    if selected_month not in filtered_df['Mes'].unique():
+        st.warning(f"""
+        ⚠️ No coincide el mes seleccionado ({selected_month}) con los datos filtrados.
+        
+        Los meses disponibles en los filtros seleccionados son: 
+        {', '.join(filtered_df['Mes'].unique())}
+        
+        Por favor seleccione uno de los meses disponibles o ajuste los filtros globales.
+        """)
+        st.stop()
+
+    # Filtrar datos para el mes seleccionado
+    df_mes = filtered_df[filtered_df['Mes'] == selected_month]
+
+    # Manejo de error si no hay datos para el mes seleccionado
+    if df_mes.empty:
+        st.warning(f"""
+        🚨 No se encontraron datos para el mes de **{selected_month}** con los filtros actuales.
+        
+        Posibles causas:
+        - Los filtros aplicados no coinciden con los selecionados
+        - Problema con los datos fuente
+        
+        **Solución:** 
+        - Verifica los filtros globales
+        - Selecciona otro mes para comparar
+        - Revisa los datos originales
+        """)
+        st.stop()
     
     if not filtered_df.empty:
         ventas_mensuales = filtered_df.groupby(['Vendedor', 'Mes'], observed=True)['Monto vendido'].sum().unstack()
@@ -449,6 +496,340 @@ with tab3:
         st.warning("No hay datos para mostrar")
         st.stop()
     
+    # Verificar que existe la columna Familia_prod
+    if 'Familia_prod' not in filtered_df.columns:
+        st.error("Error: La columna 'Familia_prod' no existe en los datos")
+        st.stop()
+    
+    # Análisis por Familia de Productos
+    st.subheader("Análisis por Familia de Productos")
+    
+    # Selector para Centro o Vendedor o Canal
+    analisis_por = st.radio(
+        "Agrupar por:",
+        options=['Centro', 'Vendedor', 'Canal'],
+        horizontal=True,
+        key='grupo_familia'
+    )
+    
+    if analisis_por == 'Centro':
+        grupo = 'Ce.'
+        filtro = centro_filter if centro_filter != 'Todos' else None
+    elif analisis_por == 'Vendedor':
+        grupo = 'Vendedor'
+        vendedores = ['Todos'] + sorted(filtered_df['Vendedor'].unique().tolist())
+        filtro = st.selectbox(
+            f"Seleccionar {analisis_por}",
+            options=vendedores,
+            key=f"filtro_{analisis_por.lower()}_familia"
+        )
+    else:  # Canal
+        grupo = 'Canal'
+        canales = ['Todos'] + sorted(filtered_df['Canal'].unique().tolist())
+        filtro = st.selectbox(
+            f"Seleccionar {analisis_por}",
+            options=canales,
+            key=f"filtro_{analisis_por.lower()}_familia"
+        )
+    
+    # Filtrar datos si se seleccionó un centro/vendedor/canal específico
+    df_familias = filtered_df.copy()
+    if filtro and filtro != 'Todos':
+        df_familias = df_familias[df_familias[grupo] == filtro]
+    
+    # Agrupar por Familia_prod
+    familias = df_familias.groupby(['Familia_prod', grupo], observed=True).agg({
+        'Monto vendido': 'sum',
+        'Cantidad vendida': 'sum',
+        'PRECIO PROM': 'mean',
+        'Texto breve de material': 'count'
+    }).reset_index()
+    
+    familias.columns = ['Familia', grupo, 'Ventas Totales', 'Unidades Vendidas', 'Precio Promedio', 'Productos Diferentes']
+    familias = familias.sort_values('Ventas Totales', ascending=False)
+    
+    # Calcular porcentajes acumulados
+    total_ventas = familias['Ventas Totales'].sum()
+    total_unidades = familias['Unidades Vendidas'].sum()
+    
+    if total_ventas > 0 and total_unidades > 0:
+        familias['% Acumulado Ventas'] = (familias['Ventas Totales'].cumsum() / total_ventas) * 100
+        familias['% Acumulado Unidades'] = (familias['Unidades Vendidas'].cumsum() / total_unidades) * 100
+    else:
+        familias['% Acumulado Ventas'] = 0
+        familias['% Acumulado Unidades'] = 0
+    
+    # Mostrar resultados
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Familias", len(familias))
+    with col2:
+        st.metric("Ventas Totales", f"${total_ventas:,.2f}")
+    with col3:
+        st.metric("Unidades Totales", f"{total_unidades:,.0f}")
+    with col4:
+        st.metric("Productos Diferentes", familias['Productos Diferentes'].sum())
+    
+    # Mostrar tabla de familias
+    st.dataframe(
+        familias.style.format({
+            'Ventas Totales': "${:,.2f}",
+            'Unidades Vendidas': "{:,.0f}",
+            'Precio Promedio': "${:,.2f}",
+            '% Acumulado Ventas': "{:.1f}%",
+            '% Acumulado Unidades': "{:.1f}%",
+            'Productos Diferentes': "{:,.0f}"
+        }).background_gradient(subset=['Ventas Totales'], cmap='Blues'),
+        use_container_width=True,
+        height=500
+    )
+    
+    # Gráfico de Pareto por familias
+    fig_familias = px.bar(
+        familias.head(20),
+        x='Familia',
+        y='Ventas Totales',
+        title=f'Top 20 Familias por Ventas ({filtro if filtro != "Todos" else "Todos los " + analisis_por + "s"})',
+        labels={'Ventas Totales': 'Ventas ($)', 'Familia': 'Familia de Productos'},
+        color='Ventas Totales',
+        color_continuous_scale='Blues',
+        hover_data=['Unidades Vendidas', 'Precio Promedio', 'Productos Diferentes']
+    )
+    
+    fig_familias.add_scatter(
+        x=familias.head(20)['Familia'],
+        y=familias.head(20)['% Acumulado Ventas'],
+        mode='lines+markers',
+        name='% Acumulado Ventas',
+        yaxis='y2',
+        line=dict(color='orange', width=2)
+    )
+    
+    fig_familias.update_layout(
+        yaxis2=dict(
+            title='% Acumulado Ventas',
+            overlaying='y',
+            side='right',
+            range=[0, 100]
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=600,
+        xaxis_tickangle=-45,
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_familias, use_container_width=True)
+    
+    # Análisis por Productos dentro de cada Familia
+    st.subheader("Análisis de Productos por Familia")
+    
+    familia_seleccionada = st.selectbox(
+        "Seleccionar Familia para ver detalle de productos",
+        options=['Todas'] + sorted(filtered_df['Familia_prod'].unique().tolist()),
+        key='select_familia_detalle'
+    )
+    
+    # Filtrar productos por familia seleccionada
+    df_productos_familia = filtered_df.copy()
+    if familia_seleccionada != 'Todas':
+        df_productos_familia = df_productos_familia[df_productos_familia['Familia_prod'] == familia_seleccionada]
+    
+    # Agrupar productos
+    productos = df_productos_familia.groupby(['SKU', 'Texto breve de material'], observed=True).agg({
+        'Monto vendido': 'sum',
+        'Cantidad vendida': 'sum',
+        'PRECIO PROM': 'mean',
+        'Factura': 'nunique'
+    }).reset_index()
+    
+    productos.columns = ['SKU', 'Producto', 'Ventas Totales', 'Unidades Vendidas', 'Precio Promedio', 'Facturas']
+    productos = productos.sort_values('Ventas Totales', ascending=False)
+    
+    # Calcular Pareto para productos
+    total_ventas_productos = productos['Ventas Totales'].sum()
+    if total_ventas_productos > 0:
+        productos['% Acumulado Ventas'] = (productos['Ventas Totales'].cumsum() / total_ventas_productos) * 100
+        pareto = productos[productos['% Acumulado Ventas'] <= 80].copy()
+    else:
+        productos['% Acumulado Ventas'] = 0
+        pareto = productos.copy()
+    
+    # Mostrar resultados
+    st.write(f"**Productos en familia:** {familia_seleccionada if familia_seleccionada != 'Todas' else 'Todas las familias'}")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Productos", len(productos))
+    with col2:
+        st.metric("Ventas Totales", f"${productos['Ventas Totales'].sum():,.2f}")
+    with col3:
+        st.metric("Unidades Totales", f"{productos['Unidades Vendidas'].sum():,.0f}")
+    
+    # Mostrar top productos
+    st.dataframe(
+        productos.style.format({
+            'Ventas Totales': "${:,.2f}",
+            'Unidades Vendidas': "{:,.0f}",
+            'Precio Promedio': "${:,.2f}",
+            'Facturas': "{:,.0f}",
+            '% Acumulado Ventas': "{:.1f}%"
+        }).background_gradient(subset=['Ventas Totales'], cmap='Greens'),
+        use_container_width=True,
+        height=500
+    )
+    
+    # Gráfico de Pareto para productos
+    if not productos.empty:
+        fig_productos = px.bar(
+            productos.head(20),
+            x='Producto',
+            y='Ventas Totales',
+            title=f'Top 20 Productos en {familia_seleccionada if familia_seleccionada != "Todas" else "Todas las Familias"}',
+            labels={'Ventas Totales': 'Ventas ($)', 'Producto': 'Producto'},
+            color='Ventas Totales',
+            color_continuous_scale='Greens',
+            hover_data=['Unidades Vendidas', 'Precio Promedio', 'Facturas']
+        )
+        
+        fig_productos.add_scatter(
+            x=productos.head(20)['Producto'],
+            y=productos.head(20)['% Acumulado Ventas'],
+            mode='lines+markers',
+            name='% Acumulado Ventas',
+            yaxis='y2',
+            line=dict(color='red', width=2)
+        )
+        
+        fig_productos.update_layout(
+            yaxis2=dict(
+                title='% Acumulado Ventas',
+                overlaying='y',
+                side='right',
+                range=[0, 100]
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            height=600,
+            xaxis_tickangle=-45,
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_productos, use_container_width=True)
+    
+    # Análisis por productos individuales
+    st.subheader("Análisis por Productos Individuales")
+    
+    # Selector para agrupación de productos
+    analisis_por_producto = st.radio(
+        "Agrupar productos por:",
+        options=['Centro', 'Vendedor', 'Canal', 'Familia_prod'],
+        horizontal=True,
+        key='grupo_producto'
+    )
+    
+    if analisis_por_producto == 'Centro':
+        grupo_producto = 'Ce.'
+        filtro_producto = centro_filter if centro_filter != 'Todos' else None
+    elif analisis_por_producto == 'Vendedor':
+        grupo_producto = 'Vendedor'
+        vendedores = ['Todos'] + sorted(filtered_df['Vendedor'].unique().tolist())
+        filtro_producto = st.selectbox(
+            f"Seleccionar {analisis_por_producto} para productos",
+            options=vendedores,
+            key=f"filtro_vendedor_producto"
+        )
+    elif analisis_por_producto == 'Canal':
+        grupo_producto = 'Canal'
+        canales = ['Todos'] + sorted(filtered_df['Canal'].unique().tolist())
+        filtro_producto = st.selectbox(
+            f"Seleccionar {analisis_por_producto} para productos",
+            options=canales,
+            key=f"filtro_canal_producto"
+        )
+    else:  # Familia_prod
+        grupo_producto = 'Familia_prod'
+        familias = ['Todos'] + sorted(filtered_df['Familia_prod'].unique().tolist())
+        filtro_producto = st.selectbox(
+            f"Seleccionar Familia para productos",
+            options=familias,
+            key=f"filtro_familia_producto"
+        )
+    
+    # Filtrar datos si se seleccionó un filtro específico
+    df_productos = filtered_df.copy()
+    if filtro_producto and filtro_producto != 'Todos':
+        df_productos = df_productos[df_productos[grupo_producto] == filtro_producto]
+    
+    productos = df_productos.groupby(['SKU', 'Texto breve de material'], observed=True).agg({
+        'Monto vendido': 'sum',
+        'Cantidad vendida': 'sum',
+        'PRECIO PROM': 'mean'
+    }).reset_index()
+    
+    productos.columns = ['SKU', 'Producto', 'Ventas Totales', 'Unidades Vendidas', 'Precio Promedio']
+    productos = productos.sort_values('Ventas Totales', ascending=False)
+    
+    # Calcular Pareto
+    total_ventas_productos = productos['Ventas Totales'].sum()
+    if total_ventas_productos > 0:
+        productos['% Acumulado Ventas'] = (productos['Ventas Totales'].cumsum() / total_ventas_productos) * 100
+        pareto = productos[productos['% Acumulado Ventas'] <= 80].copy()
+    else:
+        productos['% Acumulado Ventas'] = 0
+        pareto = productos.copy()
+    
+    # Mostrar resultados
+    st.write(f"**Filtrado por:** {filtro_producto if filtro_producto != 'Todos' else 'Todos los ' + analisis_por_producto + 's'}")
+    st.write(f"**Total Productos:** {len(productos)}")
+    
+    # Mostrar top productos
+    st.dataframe(
+        productos.head(50).style.format({
+            'Ventas Totales': "${:,.2f}",
+            'Unidades Vendidas': "{:,.0f}",
+            'Precio Promedio': "${:,.2f}",
+            '% Acumulado Ventas': "{:.1f}%"
+        }).background_gradient(subset=['Ventas Totales'], cmap='Blues'),
+        use_container_width=True,
+        height=500
+    )
+    
+    # Gráfico de Pareto para productos
+    fig_productos = px.bar(
+        productos.head(20),
+        x='Producto',
+        y='Ventas Totales',
+        title=f'Top 20 Productos por Ventas ({filtro_producto if filtro_producto != "Todos" else "Todos los " + analisis_por_producto + "s"})',
+        labels={'Ventas Totales': 'Ventas ($)', 'Producto': 'Producto'},
+        color='Ventas Totales',
+        color_continuous_scale='Greens'
+    )
+    
+    fig_productos.add_scatter(
+        x=productos.head(20)['Producto'],
+        y=productos.head(20)['% Acumulado Ventas'],
+        mode='lines+markers',
+        name='% Acumulado Ventas',
+        yaxis='y2',
+        line=dict(color='red', width=2)
+    )
+    
+    fig_productos.update_layout(
+        yaxis2=dict(
+            title='% Acumulado Ventas',
+            overlaying='y',
+            side='right',
+            range=[0, 100]
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=500,
+        xaxis_tickangle=-45
+    )
+    
+    st.plotly_chart(fig_productos, use_container_width=True)
+    
+    # Análisis original por productos individuales (se mantiene igual)
+    st.subheader("Análisis por Productos Individuales")
+    
     productos = filtered_df.groupby(['SKU', 'Texto breve de material'], observed=True).agg({
         'Monto vendido': 'sum',
         'Cantidad vendida': 'sum'
@@ -472,8 +853,7 @@ with tab3:
         }),
         use_container_width=True,
         height=400
-    )
-    
+    )    
     fig = px.line(
         productos,
         x='Posición',
