@@ -152,19 +152,19 @@ def load_quota_data():
             return df_quota
             
     except Exception as e:
-        st.error(f"Error al cargar el archivo de cuotas desde Google Drive: {str(e)}")
+        st.error(f"Error al cargar datos...: {str(e)}")
         return pd.DataFrame()
     finally:
         if 'tmp' in locals() and os.path.exists(tmp.name):
             os.unlink(tmp.name)
 
 # Cargar datos
-with st.spinner("Cargando datos desde Google Drive..."):
+with st.spinner("Cargando datos..."):
     df = load_data()
     quota_df = load_quota_data()
 
 if df.empty:
-    st.warning("No se pudieron cargar los datos. Verifica los enlaces de Google Drive.")
+    st.warning("No se pudieron cargar los datos. Verifique con el administrador del aplicativo....")
     st.stop()
 
 # Sidebar para filtros
@@ -341,7 +341,7 @@ with tab1:
         **Solución:** 
         - Verifica los filtros globales
         - Selecciona otro mes para comparar
-        - Revisa los datos originales
+        - Contacte al administrador del aplicativo
         """)
         st.stop()
     
