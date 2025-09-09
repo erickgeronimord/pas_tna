@@ -18,7 +18,7 @@ import os
 USUARIOS = {
     "egeronimo": "1603",
     "mcamilo": "2025",
-    "hespinal": "2025",
+    "hespinal": "2025"
 }
 
 def check_auth():
@@ -1407,4 +1407,5 @@ with tab8:
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🔄 La fecha de actualizacion es al dia {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.sidebar.markdown("📊 Los datos de este reporte son de SAP")
+
 
